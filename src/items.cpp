@@ -5,6 +5,7 @@
 
 #include "items.h"
 
+#include "configmanager.h"
 #include "movement.h"
 #include "pugicast.h"
 #include "weapons.h"
@@ -261,7 +262,9 @@ void Items::clear() {
 
 bool Items::reload() {
 	clear();
-	loadFromOtb("data/items/items.otb");
+	if (!loadFromDat(getString(ConfigManager::ASSETS_DAT_PATH))) {
+		return false;
+	}
 
 	if (!loadFromXml()) {
 		return false;
@@ -270,6 +273,46 @@ bool Items::reload() {
 	g_moveEvents->reload();
 	g_weapons->reload();
 	g_weapons->loadDefaults();
+	return true;
+}
+
+bool Items::loadFromDat(std::string_view file)
+{
+	std::ifstream fin(std::string{file}, std::ios::binary | std::ios::ate);
+	if (!fin.is_open()) {
+		std::cout << "[Error - Items::loadFromDat] Unable to load assets.dat from path: " << file << std::endl;
+		std::cout << "[Error - Items::loadFromDat] Copy 'Tibia.dat' from your client folder, rename it to 'assets.dat' and place it in 'data/items/'." << std::endl;
+		return false;
+	}
+
+	auto fileSize = static_cast<size_t>(fin.tellg());
+	fin.seekg(0, std::ios::beg);
+
+	std::vector<uint8_t> buf(fileSize);
+	fin.read(reinterpret_cast<char*>(buf.data()), fileSize);
+	fin.close();
+
+	size_t pos = 4;
+
+	uint16_t itemCount = 0;
+	std::memcpy(&itemCount, &buf[pos], sizeof(itemCount));
+	pos += sizeof(itemCount);
+
+	pos += 6;
+
+	items.resize(itemCount + 1);
+
+	const bool extendedSprites = true;
+	for (uint16_t id = 100; id < items.size(); ++id) {
+		ItemType& iType = items[id];
+		iType.clientId = id;
+		iType.id = id;
+		if (!unserializeDatItem(iType, buf.data(), pos, fileSize, extendedSprites)) {
+			return false;
+		}
+	}
+
+	items.shrink_to_fit();
 	return true;
 }
 
@@ -1444,13 +1487,325 @@ const ItemType& Items::getItemType(size_t id) const {
 	return items.front();
 }
 
+bool Items::hasItemType(size_t id) const {
+	return id < items.size() && items[id].id != 0 && items[id].clientId != 0;
+}
+
+const ItemType& Items::getNetworkItemType(size_t id) const {
+	if (hasItemType(id)) {
+		return items[id];
+	}
+
+	if (hasItemType(ITEM_BAG)) {
+		return items[ITEM_BAG];
+	}
+
+	return items.front();
+}
+
 const ItemType& Items::getItemIdByClientId(uint16_t spriteId) const {
-	if (spriteId >= 100) {
-		if (uint16_t serverId = clientIdToServerIdMap.getServerId(spriteId)) {
-			return getItemType(serverId);
-		}
+	if (spriteId >= 100 && hasItemType(spriteId)) {
+		return getItemType(spriteId);
 	}
 	return items.front();
+}
+
+bool Items::unserializeDatItem(ItemType& iType, const uint8_t* buf, size_t& pos, size_t bufSize, bool extendedSprites)
+{
+	auto readUint16 = [buf, bufSize](size_t& cursor, uint16_t& value) -> bool {
+		if (cursor + sizeof(uint16_t) > bufSize) {
+			return false;
+		}
+
+		std::memcpy(&value, &buf[cursor], sizeof(uint16_t));
+		cursor += sizeof(uint16_t);
+		return true;
+	};
+
+	auto skipBytes = [bufSize](size_t& cursor, size_t amount) -> bool {
+		if (cursor + amount > bufSize) {
+			return false;
+		}
+
+		cursor += amount;
+		return true;
+	};
+
+	auto remapAttr = [](uint8_t rawAttr) -> uint16_t {
+		if (rawAttr == 16) {
+			return 253;
+		}
+		if (rawAttr == 254) {
+			return 34;
+		}
+		if (rawAttr == 35) {
+			return 251;
+		}
+		if (rawAttr > 16) {
+			return rawAttr - 1;
+		}
+		return rawAttr;
+	};
+
+	uint8_t rawFlag;
+	do {
+		if (pos >= bufSize) {
+			return false;
+		}
+
+		rawFlag = buf[pos++];
+		if (rawFlag == 0xFF) {
+			break;
+		}
+
+		switch (remapAttr(rawFlag)) {
+			case 0: {
+				iType.group = ITEM_GROUP_GROUND;
+				uint16_t groundSpeed = 0;
+				if (!readUint16(pos, groundSpeed)) {
+					return false;
+				}
+				iType.speed = groundSpeed;
+				break;
+			}
+
+			case 1:
+				iType.alwaysOnTopOrder = 1;
+				break;
+
+			case 2:
+				iType.alwaysOnTopOrder = 2;
+				break;
+
+			case 3:
+				iType.alwaysOnTopOrder = 3;
+				break;
+
+			case 4:
+				iType.group = ITEM_GROUP_CONTAINER;
+				iType.type = ITEM_TYPE_CONTAINER;
+				break;
+
+			case 5:
+				iType.stackable = true;
+				break;
+
+			case 6:
+				iType.forceUse = true;
+				break;
+
+			case 7:
+				iType.useable = true;
+				break;
+
+			case 8: {
+				iType.canWriteText = true;
+				iType.canReadText = true;
+				uint16_t maxTextLen = 0;
+				if (!readUint16(pos, maxTextLen)) {
+					return false;
+				}
+				iType.maxTextLen = maxTextLen;
+				break;
+			}
+
+			case 9: {
+				iType.canReadText = true;
+				uint16_t maxTextLen = 0;
+				if (!readUint16(pos, maxTextLen)) {
+					return false;
+				}
+				iType.maxTextLen = maxTextLen;
+				break;
+			}
+
+			case 10:
+				iType.group = ITEM_GROUP_FLUID;
+				break;
+
+			case 11:
+				iType.group = ITEM_GROUP_SPLASH;
+				break;
+
+			case 12:
+				iType.blockSolid = true;
+				break;
+
+			case 13:
+				iType.moveable = false;
+				break;
+
+			case 14:
+				iType.blockProjectile = true;
+				break;
+
+			case 15:
+				iType.blockPathFind = true;
+				break;
+
+			case 16:
+				iType.pickupable = true;
+				break;
+
+			case 17:
+				iType.isHangable = true;
+				break;
+
+			case 18:
+				iType.isHangable = true;
+				iType.isHorizontal = true;
+				break;
+
+			case 19:
+				iType.isHangable = true;
+				iType.isVertical = true;
+				break;
+
+			case 20:
+				iType.rotatable = true;
+				break;
+
+			case 21: {
+				uint16_t lightLevel = 0;
+				uint16_t lightColor = 0;
+				if (!readUint16(pos, lightLevel) || !readUint16(pos, lightColor)) {
+					return false;
+				}
+				iType.lightLevel = lightLevel;
+				iType.lightColor = lightColor;
+				break;
+			}
+
+			case 22:
+			case 23:
+			case 26:
+			case 27:
+			case 30:
+				break;
+
+			case 24:
+				if (!skipBytes(pos, 4)) {
+					return false;
+				}
+				break;
+
+			case 25:
+				iType.hasHeight = true;
+				if (!skipBytes(pos, 2)) {
+					return false;
+				}
+				break;
+
+			case 28:
+				if (!skipBytes(pos, 2)) {
+					return false;
+				}
+				break;
+
+			case 29: {
+				uint16_t lensHelp = 0;
+				if (!readUint16(pos, lensHelp)) {
+					return false;
+				}
+				if (lensHelp == 1112) {
+					iType.canReadText = true;
+				}
+				break;
+			}
+
+			case 31:
+				iType.lookThrough = true;
+				break;
+
+			case 32:
+				if (!skipBytes(pos, 2)) {
+					return false;
+				}
+				break;
+
+			case 33:
+				iType.wareId = iType.id;
+				if (!skipBytes(pos, 6)) {
+					return false;
+				}
+				{
+					uint16_t nameLen = 0;
+					if (!readUint16(pos, nameLen) || !skipBytes(pos, static_cast<size_t>(nameLen) + 4)) {
+						return false;
+					}
+				}
+				break;
+
+			case 34: {
+				uint16_t usable = 0;
+				if (!readUint16(pos, usable)) {
+					return false;
+				}
+				iType.useable = (usable != 0);
+				break;
+			}
+
+			case 35:
+			case 36:
+			case 37:
+			case 38:
+			case 39:
+			case 40:
+			case 41:
+			case 42:
+			case 43:
+			case 44:
+			case 253:
+				break;
+
+			case 251:
+				if (!skipBytes(pos, 2)) {
+					return false;
+				}
+				break;
+
+			default: {
+				std::cout << "[Error - Items::unserializeDatItem] Unknown flag " << static_cast<uint32_t>(rawFlag)
+					<< " (mapped to " << remapAttr(rawFlag) << ") at id " << iType.id << std::endl;
+				return false;
+			}
+		}
+	} while (rawFlag != 0xFF);
+
+	iType.alwaysOnTop = (iType.alwaysOnTopOrder != 0);
+
+	if (pos + 7 > bufSize) {
+		return false;
+	}
+
+	uint8_t width = buf[pos++];
+	uint8_t height = buf[pos++];
+	if (width > 1 || height > 1) {
+		if (!skipBytes(pos, 1)) {
+			return false;
+		}
+	}
+
+	uint8_t layers = buf[pos++];
+	uint8_t patternX = buf[pos++];
+	uint8_t patternY = buf[pos++];
+	uint8_t patternZ = buf[pos++];
+	uint8_t frames = buf[pos++];
+	iType.isAnimation = (frames > 1);
+
+	if (frames > 1) {
+		if (!skipBytes(pos, 1 + 4 + 1 + (static_cast<size_t>(frames) * 8))) {
+			return false;
+		}
+	}
+
+	uint32_t numSprites = static_cast<uint32_t>(width) * height * layers * patternX * patternY * patternZ * frames;
+	const uint32_t spriteIdBytes = extendedSprites ? 4 : 2;
+	if (!skipBytes(pos, static_cast<size_t>(spriteIdBytes) * numSprites)) {
+		return false;
+	}
+
+	return true;
 }
 
 uint16_t Items::getItemIdByName(const std::string& name) {

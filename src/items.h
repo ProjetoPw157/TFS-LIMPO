@@ -390,12 +390,15 @@ class Items {
 		bool reload();
 		void clear();
 
+		bool loadFromDat(std::string_view file);
 		bool loadFromOtb(const std::string& file);
 
 		const ItemType& operator[](size_t id) const {
 			return getItemType(id);
 		}
+		bool hasItemType(size_t id) const;
 		const ItemType& getItemType(size_t id) const;
+		const ItemType& getNetworkItemType(size_t id) const;
 		ItemType& getItemType(size_t id);
 		const ItemType& getItemIdByClientId(uint16_t spriteId) const;
 
@@ -452,6 +455,8 @@ class Items {
 			private:
 				std::vector<uint16_t> vec;
 		} clientIdToServerIdMap;
+
+		bool unserializeDatItem(ItemType& itemType, const uint8_t* buf, size_t& pos, size_t bufSize, bool extendedSprites);
 };
 
 #endif // FS_ITEMS_H
