@@ -101,7 +101,7 @@ class Thing {
 
 		virtual Thing* getThing(size_t) const { return nullptr; }
 
-		virtual uint32_t getItemTypeCount(uint16_t, int32_t = -1) const { return 0; }
+		virtual uint32_t getItemTypeCount(uint16_t, int32_t = -1, bool = false) const { return 0; }
 		virtual std::map<uint32_t, uint32_t>& getAllItemTypeCount(std::map<uint32_t, uint32_t>& countMap) const { return countMap; }
 
 		virtual void internalRemoveThing(Thing*) {}

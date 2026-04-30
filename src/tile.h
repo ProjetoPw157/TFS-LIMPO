@@ -256,7 +256,7 @@ class Tile : virtual public Thing {
 
 		int32_t getThingIndex(const Thing* thing) const override;
 		size_t getLastIndex() const override { return getThingCount(); }
-		uint32_t getItemTypeCount(uint16_t itemId, int32_t subType = -1) const override;
+		uint32_t getItemTypeCount(uint16_t itemId, int32_t subType = -1, bool ignoreEquipped = false) const override;
 		Thing* getThing(size_t index) const override;
 
 		void postAddNotification(Thing* thing, const Thing* oldParent, int32_t index, ReceiverLink_t link = LINK_OWNER) override;

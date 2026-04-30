@@ -8,11 +8,17 @@
 #include "luascript.h"
 
 class Npc;
+class NpcScriptInterface;
+class NpcType;
 class Player;
 
 class Npcs {
 	public:
+		static bool loadScripts(bool reload = false);
 		static void reload();
+		static void addNpcType(const std::string& name, const std::shared_ptr<NpcType>& npcType);
+		static std::shared_ptr<NpcType> getNpcType(const std::string& name);
+		static NpcScriptInterface* getScriptInterface();
 };
 
 class NpcScriptInterface final : public LuaScriptInterface {
@@ -54,6 +60,7 @@ class NpcScriptInterface final : public LuaScriptInterface {
 class NpcEventsHandler {
 	public:
 		NpcEventsHandler(const std::string& file, Npc* npc);
+		NpcEventsHandler();
 
 		void onCreatureAppear(Creature* creature);
 		void onCreatureDisappear(Creature* creature);
@@ -65,11 +72,16 @@ class NpcEventsHandler {
 		void onThink();
 
 		bool isLoaded() const;
-		std::unique_ptr<NpcScriptInterface> scriptInterface;
+		void setNpc(Npc* newNpc) {
+			npc = newNpc;
+		}
 
 	private:
 		Npc* npc;
+		std::unique_ptr<NpcScriptInterface> ownedScriptInterface;
 
+	public:
+		NpcScriptInterface* scriptInterface = nullptr;
 		int32_t creatureAppearEvent = -1;
 		int32_t creatureDisappearEvent = -1;
 		int32_t creatureMoveEvent = -1;
@@ -78,6 +90,34 @@ class NpcEventsHandler {
 		int32_t playerEndTradeEvent = -1;
 		int32_t thinkEvent = -1;
 		bool loaded = false;
+};
+
+class NpcType {
+	public:
+		NpcType();
+
+		bool loadCallback(NpcScriptInterface* scriptInterface);
+
+		std::string name;
+		std::string eventType;
+
+		uint8_t speechBubble = SPEECHBUBBLE_NONE;
+		uint32_t walkTicks = 1500;
+		uint32_t baseSpeed = 100;
+		int32_t masterRadius = -1;
+		int32_t health = 100;
+		int32_t healthMax = 100;
+
+		bool floorChange = false;
+		bool attackable = false;
+		bool ignoreHeight = false;
+		bool isIdle = true;
+		bool pushable = true;
+		bool fromLua = true;
+
+		Outfit_t defaultOutfit;
+		std::map<std::string, std::string> parameters;
+		std::unique_ptr<NpcEventsHandler> npcEventHandler;
 };
 
 class Npc final : public Creature {
@@ -114,9 +154,13 @@ class Npc final : public Creature {
 
 		bool load();
 		void reload();
+		void loadNpcTypeInfo();
 
 		const std::string& getName() const override {
 			return name;
+		}
+		void setName(const std::string& newName) {
+			name = newName;
 		}
 		const std::string& getNameDescription() const override {
 			return name;
@@ -207,6 +251,7 @@ class Npc final : public Creature {
 		void closeAllShopWindows();
 
 		std::map<std::string, std::string> parameters;
+		std::shared_ptr<NpcType> npcType;
 
 		std::set<Player*> shopPlayerSet;
 		std::set<Player*> spectators;

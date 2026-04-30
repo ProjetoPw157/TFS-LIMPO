@@ -1213,7 +1213,7 @@ int32_t Tile::getStackposOfItem(const Player* player, const Item* item) const {
 	return -1;
 }
 
-uint32_t Tile::getItemTypeCount(uint16_t itemId, int32_t subType /*= -1*/) const {
+uint32_t Tile::getItemTypeCount(uint16_t itemId, int32_t subType /*= -1*/, bool /*ignoreEquipped = false*/) const {
 	uint32_t count = 0;
 	if (ground && ground->getID() == itemId) {
 		count += Item::countByType(ground, subType);

@@ -629,7 +629,7 @@ int32_t Container::getThingIndex(const Thing* thing) const {
 	return -1;
 }
 
-uint32_t Container::getItemTypeCount(uint16_t itemId, int32_t subType/* = -1*/) const {
+uint32_t Container::getItemTypeCount(uint16_t itemId, int32_t subType/* = -1*/, bool /*ignoreEquipped = false*/) const {
 	uint32_t count = 0;
 	for (Item* item : itemlist) {
 		if (item->getID() == itemId) {
