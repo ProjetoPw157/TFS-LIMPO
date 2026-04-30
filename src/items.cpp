@@ -10,6 +10,8 @@
 #include "pugicast.h"
 #include "weapons.h"
 
+#include <fstream>
+
 extern MoveEvents* g_moveEvents;
 extern Weapons* g_weapons;
 

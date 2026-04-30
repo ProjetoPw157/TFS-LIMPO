@@ -53,6 +53,8 @@ extern Weapons* g_weapons;
 
 LuaEnvironment g_luaEnvironment;
 
+static Outfit_t getOutfit(lua_State* L, int32_t arg);
+
 namespace {
 
 	constexpr int32_t EVENT_ID_LOADING = 1;
@@ -67,6 +69,7 @@ namespace {
 		LuaData_Player,
 		LuaData_Monster,
 		LuaData_Npc,
+		LuaData_NpcType,
 		LuaData_Tile,
 	};
 
@@ -155,6 +158,8 @@ namespace {
 			lua_pushnumber(L, LuaData_Monster);
 		} else if (className == "Npc") {
 			lua_pushnumber(L, LuaData_Npc);
+		} else if (className == "NpcType") {
+			lua_pushnumber(L, LuaData_NpcType);
 		} else if (className == "Tile") {
 			lua_pushnumber(L, LuaData_Tile);
 		} else {
@@ -251,6 +256,206 @@ namespace {
 	template <class T>
 	void pushSharedPtr(lua_State* L, T value) {
 		new (lua_newuserdata(L, sizeof(T))) T(std::move(value));
+	}
+
+	int luaGameCreateNpcType(lua_State* L) {
+		const std::string& name = lua::getString(L, 1);
+		if (name.empty()) {
+			lua_pushnil(L);
+			return 1;
+		}
+
+		auto npcType = Npcs::getNpcType(name);
+		if (!npcType) {
+			npcType = std::make_shared<NpcType>();
+			npcType->name = name;
+			Npcs::addNpcType(name, npcType);
+		}
+
+		lua::pushUserdata(L, npcType.get());
+		lua::setMetatable(L, -1, "NpcType");
+		return 1;
+	}
+
+	int luaNpcTypeCreate(lua_State* L) {
+		auto npcType = Npcs::getNpcType(lua::getString(L, 2));
+		if (!npcType) {
+			lua_pushnil(L);
+			return 1;
+		}
+
+		lua::pushUserdata(L, npcType.get());
+		lua::setMetatable(L, -1, "NpcType");
+		return 1;
+	}
+
+	int luaNpcTypeName(lua_State* L) {
+		NpcType* npcType = lua::getUserdata<NpcType>(L, 1);
+		if (!npcType) {
+			lua_pushnil(L);
+			return 1;
+		}
+		if (lua_gettop(L) == 1) {
+			lua::pushString(L, npcType->name);
+		} else {
+			npcType->name = lua::getString(L, 2);
+			lua::pushBoolean(L, true);
+		}
+		return 1;
+	}
+
+	int luaNpcTypeEventType(lua_State* L) {
+		NpcType* npcType = lua::getUserdata<NpcType>(L, 1);
+		if (!npcType) {
+			lua_pushnil(L);
+			return 1;
+		}
+		if (lua_gettop(L) == 1) {
+			lua::pushString(L, npcType->eventType);
+		} else {
+			npcType->eventType = lua::getString(L, 2);
+			lua::pushBoolean(L, true);
+		}
+		return 1;
+	}
+
+	template <typename T, typename Member>
+	int luaNpcTypeNumber(lua_State* L, Member NpcType::*member) {
+		NpcType* npcType = lua::getUserdata<NpcType>(L, 1);
+		if (!npcType) {
+			lua_pushnil(L);
+			return 1;
+		}
+		if (lua_gettop(L) == 1) {
+			lua_pushnumber(L, npcType->*member);
+		} else {
+			npcType->*member = lua::getNumber<T>(L, 2);
+			lua::pushBoolean(L, true);
+		}
+		return 1;
+	}
+
+	int luaNpcTypeSpeechBubble(lua_State* L) { return luaNpcTypeNumber<uint8_t>(L, &NpcType::speechBubble); }
+	int luaNpcTypeWalkTicks(lua_State* L) { return luaNpcTypeNumber<uint32_t>(L, &NpcType::walkTicks); }
+	int luaNpcTypeBaseSpeed(lua_State* L) { return luaNpcTypeNumber<uint32_t>(L, &NpcType::baseSpeed); }
+	int luaNpcTypeMasterRadius(lua_State* L) { return luaNpcTypeNumber<int32_t>(L, &NpcType::masterRadius); }
+	int luaNpcTypeHealth(lua_State* L) { return luaNpcTypeNumber<int32_t>(L, &NpcType::health); }
+	int luaNpcTypeMaxHealth(lua_State* L) { return luaNpcTypeNumber<int32_t>(L, &NpcType::healthMax); }
+
+	template <bool NpcType::*member>
+	int luaNpcTypeBool(lua_State* L) {
+		NpcType* npcType = lua::getUserdata<NpcType>(L, 1);
+		if (!npcType) {
+			lua_pushnil(L);
+			return 1;
+		}
+		if (lua_gettop(L) == 1) {
+			lua::pushBoolean(L, npcType->*member);
+		} else {
+			npcType->*member = lua::getBoolean(L, 2);
+			lua::pushBoolean(L, true);
+		}
+		return 1;
+	}
+
+	int luaNpcTypeOutfit(lua_State* L) {
+		NpcType* npcType = lua::getUserdata<NpcType>(L, 1);
+		if (!npcType) {
+			lua_pushnil(L);
+			return 1;
+		}
+		if (lua_gettop(L) == 1) {
+			lua::pushOutfit(L, npcType->defaultOutfit);
+		} else {
+			npcType->defaultOutfit = getOutfit(L, 2);
+			lua::pushBoolean(L, true);
+		}
+		return 1;
+	}
+
+	int luaNpcTypeParameters(lua_State* L) {
+		NpcType* npcType = lua::getUserdata<NpcType>(L, 1);
+		if (!npcType) {
+			lua_pushnil(L);
+			return 1;
+		}
+		if (lua_gettop(L) == 1) {
+			lua_createtable(L, 0, npcType->parameters.size());
+			for (const auto& [key, value] : npcType->parameters) {
+				lua::pushString(L, value);
+				lua_setfield(L, -2, key.c_str());
+			}
+		} else if (lua_gettop(L) == 2) {
+			auto it = npcType->parameters.find(lua::getString(L, 2));
+			if (it == npcType->parameters.end()) {
+				lua_pushnil(L);
+			} else {
+				lua::pushString(L, it->second);
+			}
+		} else {
+			npcType->parameters[lua::getString(L, 2)] = lua::getString(L, 3);
+			lua::pushBoolean(L, true);
+		}
+		return 1;
+	}
+
+	int luaNpcTypeOnCallback(lua_State* L) {
+		NpcType* npcType = lua::getUserdata<NpcType>(L, 1);
+		if (!npcType) {
+			lua_pushnil(L);
+			return 1;
+		}
+		lua::pushBoolean(L, npcType->loadCallback(Npcs::getScriptInterface()));
+		return 1;
+	}
+
+	int luaNpcTypeRegister(lua_State* L) {
+		NpcType* npcType = lua::getUserdata<NpcType>(L, 1);
+		if (!npcType || !lua_istable(L, 2)) {
+			lua_pushnil(L);
+			return 1;
+		}
+
+		const std::string& name = lua::getFieldString(L, 2, "name");
+		int32_t health = lua::getField<int32_t>(L, 2, "health");
+		int32_t maxHealth = lua::getField<int32_t>(L, 2, "maxHealth");
+		uint32_t walkInterval = lua::getField<uint32_t>(L, 2, "walkInterval");
+		int32_t walkRadius = lua::getField<int32_t>(L, 2, "walkRadius");
+		lua_pop(L, 5);
+
+		if (!name.empty()) {
+			npcType->name = name;
+		}
+		if (health > 0) {
+			npcType->health = health;
+		}
+		if (maxHealth > 0) {
+			npcType->healthMax = maxHealth;
+		}
+		if (walkInterval > 0) {
+			npcType->walkTicks = walkInterval;
+		}
+		if (walkRadius != 0) {
+			npcType->masterRadius = walkRadius;
+		}
+
+		lua_getfield(L, 2, "outfit");
+		if (lua_istable(L, -1)) {
+			npcType->defaultOutfit = getOutfit(L, lua_gettop(L));
+			lua_pop(L, 1);
+		} else {
+			lua_pop(L, 1);
+		}
+
+		lua_getfield(L, 2, "flags");
+		if (lua_istable(L, -1)) {
+			npcType->floorChange = lua::getField<uint8_t>(L, -1, "floorchange") != 0;
+			lua_pop(L, 1);
+		}
+		lua_pop(L, 1);
+
+		lua::pushBoolean(L, true);
+		return 1;
 	}
 
 } // namespace
@@ -2215,6 +2420,7 @@ void LuaScriptInterface::registerFunctions() {
 	registerMethod(L, "Game", "createNpc", LuaScriptInterface::luaGameCreateNpc);
 	registerMethod(L, "Game", "createTile", LuaScriptInterface::luaGameCreateTile);
 	registerMethod(L, "Game", "createMonsterType", LuaScriptInterface::luaGameCreateMonsterType);
+	registerMethod(L, "Game", "createNpcType", luaGameCreateNpcType);
 
 	registerMethod(L, "Game", "startEvent", LuaScriptInterface::luaGameStartEvent);
 
@@ -2759,6 +2965,33 @@ void LuaScriptInterface::registerFunctions() {
 	registerMethod(L, "Npc", "setSpeechBubble", LuaScriptInterface::luaNpcSetSpeechBubble);
 
 	registerMethod(L, "Npc", "getSpectators", LuaScriptInterface::luaNpcGetSpectators);
+
+	// NpcType
+	registerClass(L, "NpcType", "", luaNpcTypeCreate);
+	registerMetaMethod(L, "NpcType", "__eq", LuaScriptInterface::luaUserdataCompare);
+	registerMethod(L, "NpcType", "name", luaNpcTypeName);
+	registerMethod(L, "NpcType", "eventType", luaNpcTypeEventType);
+	registerMethod(L, "NpcType", "speechBubble", luaNpcTypeSpeechBubble);
+	registerMethod(L, "NpcType", "walkInterval", luaNpcTypeWalkTicks);
+	registerMethod(L, "NpcType", "walkSpeed", luaNpcTypeBaseSpeed);
+	registerMethod(L, "NpcType", "spawnRadius", luaNpcTypeMasterRadius);
+	registerMethod(L, "NpcType", "floorChange", luaNpcTypeBool<&NpcType::floorChange>);
+	registerMethod(L, "NpcType", "attackable", luaNpcTypeBool<&NpcType::attackable>);
+	registerMethod(L, "NpcType", "ignoreHeight", luaNpcTypeBool<&NpcType::ignoreHeight>);
+	registerMethod(L, "NpcType", "isIdle", luaNpcTypeBool<&NpcType::isIdle>);
+	registerMethod(L, "NpcType", "pushable", luaNpcTypeBool<&NpcType::pushable>);
+	registerMethod(L, "NpcType", "outfit", luaNpcTypeOutfit);
+	registerMethod(L, "NpcType", "parameters", luaNpcTypeParameters);
+	registerMethod(L, "NpcType", "health", luaNpcTypeHealth);
+	registerMethod(L, "NpcType", "maxHealth", luaNpcTypeMaxHealth);
+	registerMethod(L, "NpcType", "register", luaNpcTypeRegister);
+	registerMethod(L, "NpcType", "onSay", luaNpcTypeOnCallback);
+	registerMethod(L, "NpcType", "onDisappear", luaNpcTypeOnCallback);
+	registerMethod(L, "NpcType", "onAppear", luaNpcTypeOnCallback);
+	registerMethod(L, "NpcType", "onMove", luaNpcTypeOnCallback);
+	registerMethod(L, "NpcType", "onPlayerCloseChannel", luaNpcTypeOnCallback);
+	registerMethod(L, "NpcType", "onPlayerEndTrade", luaNpcTypeOnCallback);
+	registerMethod(L, "NpcType", "onThink", luaNpcTypeOnCallback);
 
 	// Guild
 	registerClass(L, "Guild", "", LuaScriptInterface::luaGuildCreate);
@@ -8890,7 +9123,7 @@ int LuaScriptInterface::luaPlayerSetOfflineTrainingSkill(lua_State* L) {
 }
 
 int LuaScriptInterface::luaPlayerGetItemCount(lua_State* L) {
-	// player:getItemCount(itemId[, subType = -1])
+	// player:getItemCount(itemId[, subType = -1[, ignoreEquipped = false]])
 	Player* player = lua::getUserdata<Player>(L, 1);
 	if (!player) {
 		lua_pushnil(L);
@@ -8909,7 +9142,8 @@ int LuaScriptInterface::luaPlayerGetItemCount(lua_State* L) {
 	}
 
 	int32_t subType = lua::getNumber<int32_t>(L, 3, -1);
-	lua_pushnumber(L, player->getItemTypeCount(itemId, subType));
+	bool ignoreEquipped = lua::getBoolean(L, 4, false);
+	lua_pushnumber(L, player->getItemTypeCount(itemId, subType, ignoreEquipped));
 	return 1;
 }
 
