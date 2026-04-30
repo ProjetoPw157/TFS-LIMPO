@@ -53,6 +53,8 @@ extern Weapons* g_weapons;
 
 LuaEnvironment g_luaEnvironment;
 
+static Outfit_t getOutfit(lua_State* L, int32_t arg);
+
 namespace {
 
 	constexpr int32_t EVENT_ID_LOADING = 1;
@@ -255,8 +257,6 @@ namespace {
 	void pushSharedPtr(lua_State* L, T value) {
 		new (lua_newuserdata(L, sizeof(T))) T(std::move(value));
 	}
-
-	static Outfit_t getOutfit(lua_State* L, int32_t arg);
 
 	int luaGameCreateNpcType(lua_State* L) {
 		const std::string& name = lua::getString(L, 1);
