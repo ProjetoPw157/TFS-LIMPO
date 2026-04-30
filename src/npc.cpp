@@ -1215,7 +1215,7 @@ void NpcEventsHandler::onCreatureAppear(Creature* creature) {
 	}
 
 	ScriptEnvironment* env = lua::getScriptEnv();
-	env->setScriptId(creatureAppearEvent, scriptInterface.get());
+	env->setScriptId(creatureAppearEvent, scriptInterface);
 	env->setNpc(npc);
 
 	lua_State* L = scriptInterface->getLuaState();
@@ -1237,7 +1237,7 @@ void NpcEventsHandler::onCreatureDisappear(Creature* creature) {
 	}
 
 	ScriptEnvironment* env = lua::getScriptEnv();
-	env->setScriptId(creatureDisappearEvent, scriptInterface.get());
+	env->setScriptId(creatureDisappearEvent, scriptInterface);
 	env->setNpc(npc);
 
 	lua_State* L = scriptInterface->getLuaState();
@@ -1259,7 +1259,7 @@ void NpcEventsHandler::onCreatureMove(Creature* creature, const Position& oldPos
 	}
 
 	ScriptEnvironment* env = lua::getScriptEnv();
-	env->setScriptId(creatureMoveEvent, scriptInterface.get());
+	env->setScriptId(creatureMoveEvent, scriptInterface);
 	env->setNpc(npc);
 
 	lua_State* L = scriptInterface->getLuaState();
@@ -1283,7 +1283,7 @@ void NpcEventsHandler::onCreatureSay(Creature* creature, SpeakClasses type, cons
 	}
 
 	ScriptEnvironment* env = lua::getScriptEnv();
-	env->setScriptId(creatureSayEvent, scriptInterface.get());
+	env->setScriptId(creatureSayEvent, scriptInterface);
 	env->setNpc(npc);
 
 	lua_State* L = scriptInterface->getLuaState();
@@ -1308,7 +1308,7 @@ void NpcEventsHandler::onPlayerTrade(Player* player, int32_t callback, uint16_t 
 	}
 
 	ScriptEnvironment* env = lua::getScriptEnv();
-	env->setScriptId(-1, scriptInterface.get());
+	env->setScriptId(-1, scriptInterface);
 	env->setNpc(npc);
 
 	lua_State* L = scriptInterface->getLuaState();
@@ -1335,7 +1335,7 @@ void NpcEventsHandler::onPlayerCloseChannel(Player* player) {
 	}
 
 	ScriptEnvironment* env = lua::getScriptEnv();
-	env->setScriptId(playerCloseChannelEvent, scriptInterface.get());
+	env->setScriptId(playerCloseChannelEvent, scriptInterface);
 	env->setNpc(npc);
 
 	lua_State* L = scriptInterface->getLuaState();
@@ -1357,7 +1357,7 @@ void NpcEventsHandler::onPlayerEndTrade(Player* player) {
 	}
 
 	ScriptEnvironment* env = lua::getScriptEnv();
-	env->setScriptId(playerEndTradeEvent, scriptInterface.get());
+	env->setScriptId(playerEndTradeEvent, scriptInterface);
 	env->setNpc(npc);
 
 	lua_State* L = scriptInterface->getLuaState();
@@ -1379,7 +1379,7 @@ void NpcEventsHandler::onThink() {
 	}
 
 	ScriptEnvironment* env = lua::getScriptEnv();
-	env->setScriptId(thinkEvent, scriptInterface.get());
+	env->setScriptId(thinkEvent, scriptInterface);
 	env->setNpc(npc);
 
 	scriptInterface->pushFunction(thinkEvent);
